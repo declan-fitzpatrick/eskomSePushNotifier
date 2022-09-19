@@ -2,10 +2,13 @@ import express from 'express';
 import http from 'https';
 var CronJob = require('cron').CronJob;
 
-import { webhooks } from "./webhooks"
+import { webhooks, mqttServer } from "./webhooks"
+import { AsyncMqttClient, connect } from "async-mqtt"
 
 const app = express();
 export { app as routes };
+
+let mqttServers: { client: AsyncMqttClient, topic: string }[] = []
 
 // https://documenter.getpostman.com/view/1296288/UzQuNk3E#325b0a97-08e5-405b-801a-42e7a79d5ba7
 var eskomSePushStatus: any = {};
@@ -97,6 +100,18 @@ async function webhook(endpoint, headers, body) {
     })
 }
 
+async function notifyAll(body) { 
+
+    await Promise.all([
+        ...webhooks.actions.map(action => webhook(action.endpoint, action.headers, body)),
+        ...mqttServers.map(server => server.client.publish(server.topic, JSON.stringify(body)))
+    ])
+}
+
+async function setupMqtt() {
+    mqttServers = mqttServer.servers.map((server) => ({client : connect(server.url, { username: server.username, password: server.password }), topic: server.topic }))
+}
+
 app.get('/', (req, res) => {
     res.send(
       {
@@ -133,9 +148,7 @@ app.get('/test', (req, res) => {
         stage: "0",
         event: new Date()
     }
-    for (var endpoint in webhooks.warnings){
-        webhook(webhooks.warnings[endpoint].endpoint, webhooks.warnings[endpoint].headers, body)
-    }
+    notifyAll(body)
     res.send(
         {'message': "tested webhooks"}
     )
@@ -166,9 +179,7 @@ const cronUpdateData = new CronJob('* */30 * * * *', async() => {
                 stage: newEskomSePushStatus.status[statusArea].stage,
                 event: new Date()
             }
-            for (var endpoint in webhooks.warnings){
-                webhook(webhooks.warnings[endpoint].endpoint, webhooks.warnings[endpoint].headers, body);
-            }
+            notifyAll(body)
         }
 
         // setup cron schedules for notifications and actions.
@@ -207,9 +218,7 @@ const cronAction = new CronJob(notificationTimes.action, function() {
         stage: eskomSePushStatus.status[statusArea].stage,
         event: notificationTimes.warning
     }
-    for (var endpoint in webhooks.warnings){
-        webhook(webhooks.warnings[endpoint].endpoint, webhooks.warnings[endpoint].headers, body)
-    }
+    notifyAll(body)
 });
 
 const cronNotify = new CronJob(notificationTimes.warning, function() {
@@ -220,9 +229,9 @@ const cronNotify = new CronJob(notificationTimes.warning, function() {
         stage: eskomSePushStatus.status[statusArea].stage,
         event: notificationTimes.action
     }
-    for (var endpoint in webhooks.actions){
-        webhook(webhooks.actions[endpoint].endpoint, webhooks.actions[endpoint].headers, body)
-    }
+    notifyAll(body)
 });
 
-cronUpdateData.start();
+setupMqtt().then(() => {
+    cronUpdateData.start();
+})
