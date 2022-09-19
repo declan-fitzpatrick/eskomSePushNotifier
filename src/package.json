@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "serve": "ts-node-dev server.ts"
+    "serve": "ts-node-dev server.ts",
+    "prod": "ts-node --transpile-only server.ts"
   },
   "author": "",
   "license": "ISC",
