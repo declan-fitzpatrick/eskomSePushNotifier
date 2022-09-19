@@ -9,5 +9,5 @@ services:
     command: yarn serve
     env_file: ./.env
     volumes:
-    - ./webhooks.ts:/webhooks.ts
+    - ./config.ts:/config.ts
 
