@@ -2,10 +2,13 @@ import express from 'express';
 import http from 'https';
 var CronJob = require('cron').CronJob;
 
-import { webhooks } from "./webhooks"
+import { webhooks, mqttServer } from "./config"
+import { AsyncMqttClient, connect } from "async-mqtt"
 
 const app = express();
 export { app as routes };
+
+let mqttServers: { client: AsyncMqttClient, topic: string }[] = []
 
 // https://documenter.getpostman.com/view/1296288/UzQuNk3E#325b0a97-08e5-405b-801a-42e7a79d5ba7
 var eskomSePushStatus: any = {};
@@ -20,7 +23,7 @@ var statusArea = process.env.STATUS_AREA // eskom | capetown https://documenter.
 var notificationTimes = {
     // cron schedules for the next event
     warning: new Date(4000, 1, 1),
-    action: new Date(4000, 1, 1),
+    event: new Date(4000, 1, 1),
     started: false
 };
 
@@ -97,6 +100,18 @@ async function webhook(endpoint, headers, body) {
     })
 }
 
+async function notifyAll(body) { 
+
+    await Promise.all([
+        ...webhooks.servers.map(event => webhook(event.url, event.headers, body)),
+        ...mqttServers.map(server => server.client.publish(server.topic, JSON.stringify(body)))
+    ])
+}
+
+async function setupMqtt() {
+    mqttServers = mqttServer.servers.map((server) => ({client : connect(server.url, { username: server.username, password: server.password }), topic: server.topic }))
+}
+
 app.get('/', (req, res) => {
     res.send(
       {
@@ -126,18 +141,16 @@ app.get('/area', async (req, res) => {
 });
 
 app.get('/test', (req, res) => {
-    console.log("Testing notification webhooks...");
+    console.log("Testing notifications...");
     let body = {
         message: "Loadshedding Notification",
         type: "test",
         stage: "0",
         event: new Date()
     }
-    for (var endpoint in webhooks.warnings){
-        webhook(webhooks.warnings[endpoint].endpoint, webhooks.warnings[endpoint].headers, body)
-    }
+    notifyAll(body)
     res.send(
-        {'message': "tested webhooks"}
+        {'message': "tested notifications"}
     )
 });
 
@@ -150,8 +163,8 @@ const cronUpdateData = new CronJob('* */30 * * * *', async() => {
     if (Object.keys(eskomSePushStatus).length != 0){
         // check if stage is 0. If so, can stop all cron
         if (newEskomSePushStatus.status[statusArea].stage === "0"){
-            console.log("Loadshedding now zero, stop and clear all timers");
-            cronAction.stop();
+            console.log("Loadshedding ended, timers stopped");
+            cronEvent.stop();
             cronNotify.stop();
             notificationTimes.started = false;
             return
@@ -166,12 +179,10 @@ const cronUpdateData = new CronJob('* */30 * * * *', async() => {
                 stage: newEskomSePushStatus.status[statusArea].stage,
                 event: new Date()
             }
-            for (var endpoint in webhooks.warnings){
-                webhook(webhooks.warnings[endpoint].endpoint, webhooks.warnings[endpoint].headers, body);
-            }
+            notifyAll(body)
         }
 
-        // setup cron schedules for notifications and actions.
+        // setup cron schedules for notifications and events.
         let nextEvent = new Date();
         for(let event in newEskomSePushAreaData.events){
             if (new Date(newEskomSePushAreaData.events[event].start) > nextEvent){
@@ -180,9 +191,11 @@ const cronUpdateData = new CronJob('* */30 * * * *', async() => {
             }
         }
         let nextNotification = new Date(nextEvent);
+        
         nextNotification.setHours(nextEvent.getHours()-1);
+        nextEvent.setMinutes(55);
 
-        notificationTimes.action = nextEvent ;
+        notificationTimes.event = nextEvent;
         notificationTimes.warning = nextNotification;
 
         console.log("load shedding stage: " + newEskomSePushStatus.status[statusArea].stage);
@@ -190,7 +203,7 @@ const cronUpdateData = new CronJob('* */30 * * * *', async() => {
         console.log("next notification time: " + nextNotification);
 
         if (!notificationTimes.started) {
-            cronAction.start();
+            cronEvent.start();
             cronNotify.start();
             notificationTimes.started = true;
         }
@@ -199,30 +212,28 @@ const cronUpdateData = new CronJob('* */30 * * * *', async() => {
     eskomSePushStatus = newEskomSePushStatus;
 });
 
-const cronAction = new CronJob(notificationTimes.action, function() {
-    console.log("Fire webhooks to action something")
+const cronEvent = new CronJob(notificationTimes.event, function() {
+    console.log("Fire event notification")
+    let body = {
+        message: "Loadshedding Imminent, perform necessary actions",
+        type: "event",
+        stage: eskomSePushStatus.status[statusArea].stage,
+        event: notificationTimes.event
+    }
+    notifyAll(body)
+});
+
+const cronNotify = new CronJob(notificationTimes.warning, function() {
+    console.log("Fire warning notification")
     let body = {
         message: "Loadshedding Notification",
         type: "warning",
         stage: eskomSePushStatus.status[statusArea].stage,
         event: notificationTimes.warning
     }
-    for (var endpoint in webhooks.warnings){
-        webhook(webhooks.warnings[endpoint].endpoint, webhooks.warnings[endpoint].headers, body)
-    }
+    notifyAll(body)
 });
 
-const cronNotify = new CronJob(notificationTimes.warning, function() {
-    console.log("Fire webhooks to warn about loadshedding")
-    let body = {
-        message: "Loadshedding Imminent, perform necessary actions",
-        type: "action",
-        stage: eskomSePushStatus.status[statusArea].stage,
-        event: notificationTimes.action
-    }
-    for (var endpoint in webhooks.actions){
-        webhook(webhooks.actions[endpoint].endpoint, webhooks.actions[endpoint].headers, body)
-    }
-});
-
-cronUpdateData.start();
+setupMqtt().then(() => {
+    cronUpdateData.start();
+})

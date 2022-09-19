@@ -1,18 +1,18 @@
 # EskomSePush Notifier
 
-A simple application that will call to webhooks based on Eskom events. 
+A simple application that will call to webhooks and publish to mqtt based on Eskom events. 
 Also functions as a local copy of the Eskom Se Push API to not hammer their API. 
 
 ## Use cases?
 
-* Integrations into Home-Assistant, but also really anything with a server
+* Integrations into Home-Assistant, but also really anything with a server.
 * Business Customers who want a notification engine without having to write EskomSePush integrations
 
 ## Eskom se push API bugs
 
 ```https://developer.sepush.co.za/business/2.0/areas?id=<some id>```
 
-should be area not areas, but the path returns a 500 internal server error.
+I made a typo in my query, should be `area` not `areas`, returns a 500 internal server error instead of 404. 
 
 ## Running the container/program
 
@@ -29,27 +29,28 @@ STATUS_AREA='eskom'
 * `TOKEN` is from the Eskom Se Push Team, see the [FAQ](https://developer.sepush.co.za/).
 * `STATUS_AREA` is either `eskom` or `capetown`. This may be expanded as more IPP's are brought online. 
 
-### Webhooks
+### Webhooks and MQTT
 
-Fill in the webhooks.ts file with your endpoints and headers
+Fill in the config.ts file with your configuration
 ```typescript
-export const webhooks : any = {
-    actions: [
+export const webhooks : { servers: { url: string, headers: {} }[] } = {
+    servers: [
         {
-            endpoint: "http://localhost:8080/webhook",
+            url: "http://localhost:8080/webhook",
             headers: {
                 'Content-Type': 'application/json',
                 'Token': "super secret"
             }
         }
-    ],
-    warnings: [
+    ]
+}
+export const mqttServer: { servers: { url: string, topic: string, username?: string, password?: string }[] } = {
+    servers: [
         {
-            endpoint: "http://localhost:8080/webhook",
-            headers: {
-                'Content-Type': 'application/json',
-                'Token': "super secret"
-            }
+            url: "http://localhost:8080/mqtt",
+            topic: "some topic",
+            username: "user",
+            password: "super secret"
         }
     ]
 }

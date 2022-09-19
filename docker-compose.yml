@@ -6,8 +6,8 @@ services:
     container_name: eskomsepushnotifier
     ports:
       - 9000:9000
-    command: yarn serve
+    command: npm run prod
     env_file: ./.env
     volumes:
-    - ./webhooks.ts:/webhooks.ts
+    - ./config.ts:/config.ts
 
