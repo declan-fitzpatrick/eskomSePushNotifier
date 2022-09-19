@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  eskomsepushnotifier:
+    image: eskomsepushnotifier:latest
+    container_name: eskomsepushnotifier
+    ports:
+      - 9000:9000
+    command: yarn serve
+    env_file: ./.env
+    volumes:
+    - ./webhooks.ts:/webhooks.ts
+
