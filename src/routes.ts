@@ -154,9 +154,10 @@ app.get('/test', (req, res) => {
     )
 });
 
-// every thirty mins * */30 * * * *
-const cronUpdateData = new CronJob('* */30 * * * *', async() => {
-    const d = new Date();
+// every thirty mins 0 */30 * * * *
+const cronUpdateData = new CronJob('0 */30 * * * *', async() => {
+    const d = new Date()
+    console.log('Fetching latest Eskom Se Push data at: ' + d)
     let newEskomSePushStatus: any = await getEskomSePushStatus();
     let newEskomSePushAreaData: any = await getEskomSePushAreaData();
 
@@ -192,8 +193,9 @@ const cronUpdateData = new CronJob('* */30 * * * *', async() => {
         }
         let nextNotification = new Date(nextEvent);
         
-        nextNotification.setHours(nextEvent.getHours()-1);
-        nextEvent.setMinutes(55);
+        nextNotification.setHours(nextEvent.getHours()-1); // warn 1 hour before
+        nextEvent.setHours(nextEvent.getHours()-1);        // 
+        nextEvent.setMinutes(55);                          // warn 5 mins before
 
         notificationTimes.event = nextEvent;
         notificationTimes.warning = nextNotification;

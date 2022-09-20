@@ -8,6 +8,8 @@ services:
       - 9000:9000
     command: npm run prod
     env_file: ./.env
+    environment: 
+      - TZ=Africa/Johannesburg
     volumes:
     - ./config.ts:/config.ts
 
