@@ -8,12 +8,6 @@ Also functions as a local copy of the Eskom Se Push API to not hammer their API.
 * Integrations into Home-Assistant, but also really anything with a server.
 * Business Customers who want a notification engine without having to write EskomSePush integrations
 
-## Eskom se push API bugs
-
-```https://developer.sepush.co.za/business/2.0/areas?id=<some id>```
-
-I made a typo in my query, should be `area` not `areas`, returns a 500 internal server error instead of 404. 
-
 ## Running the container/program
 
 ### Environment variables
