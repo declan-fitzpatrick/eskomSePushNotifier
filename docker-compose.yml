@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   eskomsepushnotifier:
-    image: eskomsepushnotifier:latest
+    image: declanfitzpatrick/eskomsepushnotifier:latest
     container_name: eskomsepushnotifier
     ports:
       - 9000:9000
